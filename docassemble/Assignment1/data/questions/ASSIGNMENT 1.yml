@@ -1,0 +1,237 @@
+metadata:
+  title: |
+    Legal Aid Interview
+  short title: |
+    LAI 
+  description: |
+    This interview will determine your eligibility to legal aid.
+  authors:
+    - name: Tian Warren
+      organization: COR-LAW-2215 Digital Intelligence for Lawyers
+  revision_date: 2020-10-03
+---
+modules:
+  .validation
+---
+objects:
+  applicant: Individual
+  household_members: DAList.using(object_type=Individual, there_is_another=False)
+---
+mandatory: True   
+code: |
+  start_screen
+  if citizen == "None of the above":
+    ineligible_screen
+  else:
+    over_21
+    if not over_21:
+      below_21
+  if property_owned:
+    more_property
+    if not more_property:
+      ineligible_screen_means_test 
+    if not reside_property:
+      ineligible_screen_means_test
+    if value_property > 13000:
+        ineligible_screen_means_test
+  applicant.birthdate
+  if applicant.age_in_years() >= 60 and savings > 40000 or applicant.age_in_years() < 60 and savings > 10000:
+    ineligible_screen_means_test
+  
+  household_members.append(applicant) 
+---
+mandatory: True
+code: |
+  if household_members.there_are_any:
+    review_household_members
+---
+mandatory: True
+code: |
+  total_income = 0
+  for member in household_members:
+    total_income += member.income
+  
+  number_members = len(household_members)
+  if total_income / (number_members*12) > 950:
+    ineligible_screen_means_test
+
+  else: signature   # Applicant's signature before publishing result    
+---
+table: household_members.table
+rows: household_members
+columns: 
+  - Name: row_item
+  - Birthdate: row_item.birthdate
+  - Income: row_item.income
+edit:
+  - name.first
+---
+question: | 
+  Please add all other household members.
+subquestion: |
+  A household member is any person residing with you and related by:
+  
+  1. blood
+  2. marriage; or
+  3. adoption.
+  
+  Press continue when you have added all household members.
+  
+  ${household_members.table}
+
+  ${household_members.add_action() }
+  
+field: review_household_members
+section: Household members
+---
+question: |
+  Information about your ${ordinal(i)} household member:
+fields:
+  - First Name: household_members[i].name.first
+  - Last Name: household_members[i].name.last
+  - Birthdate: household_members[i].birthdate
+    datatype: date
+  - "This person's total income in past 12 months": household_members[i].income
+    datatype: currency
+    min: 0
+    default: 0
+---
+## Questions
+---
+continue button field: start_screen
+question: |
+  Welcome
+subquestion: |
+  If you are here for legal aid press "continue".
+ 
+section: Introduction
+--- 
+question: |
+  Citizenship
+field: citizen  
+choices:
+  - Singapore Citizen: A 
+  - Permanent Resident: B
+  - Citizen or resident of a contracting state to the Hague Convention: C
+    help: |
+      Find out which states are contracting states:
+      https://www.hcch.net/en/instruments/conventions/status-table/?cid=24#mem.
+  - None of the above
+section: Citizenship
+--- 
+question: |
+  Are you **at least 21 years of age** or **applying on behalf of a minor**?
+yesno: over_21
+section: Applicant age
+--- 
+question: |
+  Do you own any property?
+yesno: property_owned
+section: Applicant property/properties
+---
+question: |
+  Property Information 
+fields:
+  - "Do you own more than one property": more_property
+    datatype: noyesradio
+    #show if: 
+  - "Do you currently reside in this property?": reside_property
+    datatype: yesnoradio
+    show if: more_property
+  - "What is the annual value of your residential property?": value_property
+    datatype: currency
+    min: 0
+    show if: reside_property
+---
+question: |
+  Savings and Investments information 
+fields:
+  - "Enter your birthdate": applicant.birthdate
+    datatype: date
+     #consider birthdate validation
+  - "Total savings and non-CPF investments": savings
+    datatype: currency
+    min: 0
+subquestion: |
+  Total Savings and Investments is the sum of the value of the following assets that you own in your name:
+
+  a) Bank accounts savings (personal or joint);
+
+  b) Overall value of shares in your Central Depository (CDP) account; and
+
+  c) Any other financial/investment products with a cash value, such as fixed deposit accounts at financial institutions, and shares, bonds and exchange traded funds aside from those in your CDP account.
+
+section: Savings and Investments information
+---
+question: |
+  Please key in your personal particulars.
+fields:
+  - First Name: applicant.name.first
+  - Last Name: applicant.name.last
+  - NRIC: nric
+    validate: check_nric
+  - "Your total income in past 12 months": applicant.income
+    datatype: currency
+    min: 0
+    default: 0
+  - Street Number and Name: applicant.address.street
+  - Apartment Unit: applicant.address.unit
+    required: False
+  - Postcode: applicant.address.postcode
+  - Country: applicant.address.country
+    code: |
+      countries_list()
+
+section: Applicant particulars
+---
+question: |
+  Sign your name
+subquestion: |
+  By signing your name, you declare to have provided true and accurate information to the best of your knowledge.
+signature: signature
+under: |
+  ${ applicant.name }
+---
+question: |
+  Congratulations on being eligible for legal aid!
+subquestion: |
+  The Legal Aid Board will now determine if your case has merits. We will reach out to you should we require more information. Thank you.
+buttons:
+  - Exit: exit
+  - Restart: restart
+mandatory: True
+
+section: Confirmation
+progress: 100
+---
+# Section Navigation Bar
+sections:
+  - Introduction
+  - Pre-requisites: 
+    - Citizenship
+    - Applicant age
+  - Means Test:
+    - Applicant property/properties
+    - Savings and Investments information
+    - Applicant particulars
+    - Household members
+  - Confirmation
+---
+features:
+  navigation: True
+  progress bar: True
+---
+## Negative Events
+---
+question: |
+  Sorry your case does not qualify for legal aid as you did not pass the means test. However, if you have compelling reasons to require legal aid, you may contact the MinLaw Services Centre for further assistance.
+event: ineligible_screen_means_test
+---
+question: |
+  If you are below 21 years of age, your parent or guardian must apply for legal aid on your behalf.
+event: below_21
+---
+question: |
+  Sorry but you do not qualify for legal aid.
+event: ineligible_screen
+--- 
